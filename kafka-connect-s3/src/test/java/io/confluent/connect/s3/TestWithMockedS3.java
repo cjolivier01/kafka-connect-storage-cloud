@@ -28,6 +28,7 @@ import com.amazonaws.services.s3.model.Tag;
 import com.amazonaws.services.s3.model.GetObjectTaggingResult;
 import com.amazonaws.services.s3.model.transform.XmlResponsesSaxParser;
 import io.confluent.connect.s3.format.parquet.ParquetUtils;
+import io.confluent.connect.s3.storage.SimpleCachedBufferManager;
 import io.findify.s3mock.S3Mock;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -212,7 +213,7 @@ public class TestWithMockedS3 extends S3SinkConnectorTestBase {
     private final AtomicInteger retries;
 
     public S3OutputStreamFlaky(String key, S3SinkConnectorConfig conf, AmazonS3 s3, AtomicInteger retries) {
-      super(key, conf, s3);
+      super(key, conf, s3, new SimpleCachedBufferManager(conf.getPartSize(), true));
       this.retries = retries;
     }
 

@@ -67,6 +67,7 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   private final String bucketName;
   private final AmazonS3 s3;
   private final S3SinkConnectorConfig conf;
+  private final BufferManager bufferManager;
   private static final String VERSION_FORMAT = "APN/1.0 Confluent/1.0 KafkaS3Connector/%s";
 
   /**
@@ -75,7 +76,12 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
    * @param conf the S3 configuration.
    * @param url the S3 address.
    */
-  public S3Storage(S3SinkConnectorConfig conf, String url) {
+  public S3Storage(
+    S3SinkConnectorConfig conf,
+    String url,
+    BufferManager bufferManager
+  ) {
+    this.bufferManager = bufferManager;
     this.url = url;
     this.conf = conf;
     this.bucketName = conf.getBucketName();
@@ -112,7 +118,13 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
   }
 
   // Visible for testing.
-  public S3Storage(S3SinkConnectorConfig conf, String url, String bucketName, AmazonS3 s3) {
+  public S3Storage(
+    S3SinkConnectorConfig conf,
+    String url,
+    String bucketName,
+    AmazonS3 s3
+  ) {
+    this.bufferManager = new SimpleCachedBufferManager(conf.getPartSize(), true);
     this.url = url;
     this.conf = conf;
     this.bucketName = bucketName;
@@ -219,10 +231,10 @@ public class S3Storage implements Storage<S3SinkConnectorConfig, ObjectListing> 
     }
 
     if (ParquetFormat.class.isAssignableFrom(formatClass)) {
-      return new S3ParquetOutputStream(path, this.conf, s3);
+      return new S3ParquetOutputStream(path, this.conf, s3, bufferManager);
     } else {
       // currently ignore what is passed as method argument.
-      return new S3OutputStream(path, this.conf, s3);
+      return new S3OutputStream(path, this.conf, s3, bufferManager);
     }
   }
 

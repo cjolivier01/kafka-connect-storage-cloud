@@ -15,8 +15,8 @@
 
 package io.confluent.connect.s3;
 
-import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.confluent.connect.s3.format.bytearray.ByteArrayFormat;
+import io.confluent.connect.s3.storage.SimpleCachedBufferManager;
 import io.confluent.connect.s3.storage.CompressionType;
 import io.confluent.connect.s3.storage.S3OutputStream;
 import io.confluent.connect.s3.util.FileUtils;
@@ -31,7 +31,6 @@ import org.powermock.api.mockito.PowerMockito;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,7 +78,9 @@ public class DataWriterByteArrayTest extends DataWriterTestBase<ByteArrayFormat>
     localProps.put(S3SinkConnectorConfig.FORMAT_CLASS_CONFIG, ByteArrayFormat.class.getName());
     setUp();
     PowerMockito.doReturn(5).when(connectorConfig).getPartSize();
-    S3OutputStream out = new S3OutputStream(S3_TEST_BUCKET_NAME, connectorConfig, s3);
+    S3OutputStream out = new S3OutputStream(
+      S3_TEST_BUCKET_NAME, connectorConfig, s3, new SimpleCachedBufferManager(connectorConfig.getPartSize(), true)
+    );
     out.write(new byte[]{65,66,67,68,69});
     out.write(70);
   }

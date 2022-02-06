@@ -23,7 +23,12 @@ public class S3OutputStreamTest extends S3SinkConnectorTestBase {
   public void before() throws Exception {
     super.setUp();
     s3Mock = mock(AmazonS3.class);
-    stream = new S3OutputStream("key", connectorConfig, s3Mock);
+    stream = new S3OutputStream(
+      "key",
+      connectorConfig,
+      s3Mock,
+      new SimpleCachedBufferManager(connectorConfig.getPartSize(), true)
+    );
   }
 
   @Test

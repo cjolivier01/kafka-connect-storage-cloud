@@ -60,18 +60,24 @@ public class S3OutputStream extends PositionOutputStream {
   private final SSECustomerKey sseCustomerKey;
   private final String sseKmsKeyId;
   private final ProgressListener progressListener;
-  private final int partSize;
   private final CannedAccessControlList cannedAcl;
   private boolean closed;
-  private ByteBuffer buffer;
+  private ByteBuffer currentBuffer;
   private MultipartUpload multiPartUpload;
   private final CompressionType compressionType;
   private final int compressionLevel;
   private volatile OutputStream compressionFilter;
   private Long position;
+  private final BufferManager bufferManager;
 
-  public S3OutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
+  public S3OutputStream(
+    String key,
+    S3SinkConnectorConfig conf,
+    AmazonS3 s3,
+    BufferManager bufferManager
+  ) {
     this.s3 = s3;
+    this.bufferManager = bufferManager;
     this.connectorConfig = conf;
     this.bucket = conf.getBucketName();
     this.key = key;
@@ -81,10 +87,9 @@ public class S3OutputStream extends PositionOutputStream {
         && StringUtils.isNotBlank(sseCustomerKeyConfig))
       ? new SSECustomerKey(sseCustomerKeyConfig) : null;
     this.sseKmsKeyId = conf.getSseKmsKeyId();
-    this.partSize = conf.getPartSize();
     this.cannedAcl = conf.getCannedAcl();
     this.closed = false;
-    this.buffer = ByteBuffer.allocate(this.partSize);
+    this.currentBuffer = bufferManager.allocate();
     this.progressListener = new ConnectProgressListener();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
@@ -93,8 +98,20 @@ public class S3OutputStream extends PositionOutputStream {
     log.debug("Create S3OutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
+  private ByteBuffer getBuffer() {
+    if (this.currentBuffer == null) {
+      this.currentBuffer = bufferManager.allocate();
+    }
+    return this.currentBuffer;
+  }
+
+  private void releaseBuffer() {
+    currentBuffer = bufferManager.release(currentBuffer);
+  }
+
   @Override
   public void write(int b) throws IOException {
+    ByteBuffer buffer = getBuffer();
     buffer.put((byte) b);
     if (!buffer.hasRemaining()) {
       uploadPart();
@@ -112,6 +129,7 @@ public class S3OutputStream extends PositionOutputStream {
       return;
     }
 
+    ByteBuffer buffer = getBuffer();
     if (buffer.remaining() <= len) {
       int firstPart = buffer.remaining();
       buffer.put(b, off, firstPart);
@@ -129,8 +147,8 @@ public class S3OutputStream extends PositionOutputStream {
   }
 
   private void uploadPart() throws IOException {
-    uploadPart(partSize);
-    buffer.clear();
+    uploadPart(bufferManager.bufferSize());
+    releaseBuffer();
   }
 
   private void uploadPart(final int size) throws IOException {
@@ -139,7 +157,7 @@ public class S3OutputStream extends PositionOutputStream {
       multiPartUpload = newMultipartUpload();
     }
     try {
-      multiPartUpload.uploadPart(new ByteArrayInputStream(buffer.array()), size);
+      multiPartUpload.uploadPart(new ByteArrayInputStream(getBuffer().array()), size);
     } catch (Exception e) {
       if (multiPartUpload != null) {
         multiPartUpload.abort();
@@ -161,6 +179,7 @@ public class S3OutputStream extends PositionOutputStream {
 
     try {
       compressionType.finalize(compressionFilter);
+      ByteBuffer buffer = getBuffer();
       if (buffer.hasRemaining()) {
         uploadPart(buffer.position());
       }
@@ -172,7 +191,7 @@ public class S3OutputStream extends PositionOutputStream {
           String.format("Multipart upload failed to complete: %s", e.getMessage())
       );
     } finally {
-      buffer.clear();
+      currentBuffer = bufferManager.release(currentBuffer);
       multiPartUpload = null;
       internalClose();
     }

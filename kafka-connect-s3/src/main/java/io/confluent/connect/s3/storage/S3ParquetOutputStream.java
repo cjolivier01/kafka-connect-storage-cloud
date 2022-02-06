@@ -25,8 +25,13 @@ public class S3ParquetOutputStream extends S3OutputStream {
 
   private volatile boolean commit;
 
-  public S3ParquetOutputStream(String key, S3SinkConnectorConfig conf, AmazonS3 s3) {
-    super(key, conf, s3);
+  public S3ParquetOutputStream(
+    String key,
+    S3SinkConnectorConfig conf,
+    AmazonS3 s3,
+    BufferManager bufferManager
+  ) {
+    super(key, conf, s3, bufferManager);
     commit = false;
   }
 

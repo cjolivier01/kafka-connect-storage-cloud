@@ -59,7 +59,11 @@ public class S3StorageTest extends S3SinkConnectorTestBase {
   //@Before should be omitted in order to be able to add properties per test.
   public void setUp() throws Exception {
     super.setUp();
-    storage = new S3Storage(connectorConfig, url);
+    storage = new S3Storage(
+      connectorConfig,
+      url,
+      new SimpleCachedBufferManager(connectorConfig.getPartSize(), true)
+    );
     retryPolicy = storage.newFullJitterRetryPolicy(connectorConfig);
   }
 
